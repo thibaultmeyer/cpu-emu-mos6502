@@ -198,8 +198,6 @@ public final class MOS6502Processor {
             return;
         }
 
-        this.cycleCount += 1; // TODO: REMOVE THIS
-
         // Increments program counter
         this.registers.programCounter += 1;
 
@@ -245,6 +243,7 @@ public final class MOS6502Processor {
 
         for (final BusUnit busUnit : this.busUnitList) {
             if (address >= busUnit.mappingAddressMin() && address <= busUnit.mappingAddressMax()) {
+                this.cycleCount += 1;
                 return busUnit.read(address & 0xFFFF) & 0xFF;
             }
         }
@@ -262,6 +261,7 @@ public final class MOS6502Processor {
 
         for (final BusUnit busUnit : this.busUnitList) {
             if (address >= busUnit.mappingAddressMin() && address <= busUnit.mappingAddressMax()) {
+                this.cycleCount += 1;
                 busUnit.write(address & 0xFFFF, value & 0xFF);
                 return;
             }
