@@ -1,7 +1,5 @@
 package io.github.thibaultmeyer.cpu.mos6502;
 
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -12,13 +10,13 @@ import java.util.Map;
  * MOS 6502 CPU.
  *
  * @see <a href="https://en.wikibooks.org/wiki/6502_Assembly">6502 Assembly - Wikibooks, open books for an open world</a>
- * @see <a href="https://llx.com/Neil/a2/opcodes.html">The 6502/65C02/65C816 Instruction Set Decoded</a>
- * @see <a href="https://retrocomputing.stackexchange.com/questions/17888/what-is-the-mos-6502-doing-on-each-cycle-of-an-instruction">What is the MOS 6502 doing on each cycle of an instruction?</a>
- * @see <a href="http://www.emulator101.com/6502-addressing-modes.html">Emulator 101 - 6502 Addressing Modes</a>
  * @see <a href="https://www.pagetable.com/c64ref/6502/?tab=3">6502 CPU | Ultimate C64 Reference</a>
+ * @see <a href="https://llx.com/Neil/a2/opcodes.html">The 6502/65C02/65C816 Instruction Set Decoded</a>
+ * @see <a href="https://www.nesdev.org/obelisk-6502-guide/reference.html">6502 Reference</a>
  * @see <a href="https://emudev.de/nes-emulator/opcodes-and-addressing-modes-the-6502">opcodes and addressing modes – the 6502</a>
  * @see <a href="https://chubakbidpaa.com/retro/2020/12/15/6502-stack-copy.html">Explaining the Stack Through 6502 Assembly</a>
- * @see <a href="https://www.nesdev.org/obelisk-6502-guide/reference.html">6502 Reference</a>
+ * @see <a href="http://www.emulator101.com/6502-addressing-modes.html">Emulator 101 - 6502 Addressing Modes</a>
+ * @see <a href="https://retrocomputing.stackexchange.com/questions/17888/what-is-the-mos-6502-doing-on-each-cycle-of-an-instruction">What is the MOS 6502 doing on each cycle of an instruction?</a>
  */
 public final class MOS6502Processor {
 
@@ -122,6 +120,15 @@ public final class MOS6502Processor {
         this.operationCodeMap.put(0x61, new OperationCode("ADC (zp,x)", this::addressingModeZeroPageIndexedXIndirect, this::instructionADC));
         this.operationCodeMap.put(0x75, new OperationCode("ADC zp,x", this::addressingModeZeroPageIndexedX, this::instructionADC));
         this.operationCodeMap.put(0x71, new OperationCode("ADC (zp),y", this::addressingModeZeroPageIndirectIndexedY, this::instructionADC));
+
+        this.operationCodeMap.put(0xED, new OperationCode("SBC a", this::addressingModeAbsolute, this::instructionSBC));
+        this.operationCodeMap.put(0xFD, new OperationCode("SBC a,x", this::addressingModeAbsoluteIndexedX, this::instructionSBC));
+        this.operationCodeMap.put(0xF9, new OperationCode("SBC a,y", this::addressingModeAbsoluteIndexedY, this::instructionSBC));
+        this.operationCodeMap.put(0xE9, new OperationCode("SBC #", this::addressingModeImmediate, this::instructionSBC));
+        this.operationCodeMap.put(0xE5, new OperationCode("SBC zp", this::addressingModeZeroPage, this::instructionSBC));
+        this.operationCodeMap.put(0xE1, new OperationCode("SBC (zp,x)", this::addressingModeZeroPageIndexedXIndirect, this::instructionSBC));
+        this.operationCodeMap.put(0xF5, new OperationCode("SBC zp,x", this::addressingModeZeroPageIndexedX, this::instructionSBC));
+        this.operationCodeMap.put(0xF1, new OperationCode("SBC (zp),y", this::addressingModeZeroPageIndirectIndexedY, this::instructionSBC));
 
         this.operationCodeMap.put(0xCD, new OperationCode("CMP a", this::addressingModeAbsolute, this::instructionCMP));
         this.operationCodeMap.put(0xDD, new OperationCode("CMP a,x", this::addressingModeAbsoluteIndexedX, this::instructionCMP));
@@ -454,7 +461,18 @@ public final class MOS6502Processor {
      */
     private void instructionADC() {
 
-        throw new NotImplementedException();
+        final int memoryValue = this.readUInt8(this.resolvedAddress);
+        final int previousOpCarry = this.registers.getFlag(MOS6502Registers.FLAG_CARRY_BIT) ? 1 : 0;
+        final int result = this.registers.accumulator + memoryValue + previousOpCarry;
+
+        this.registers.setFlag(
+            MOS6502Registers.FLAG_OVERFLOW,
+            (~(this.registers.accumulator ^ memoryValue) & (this.registers.accumulator ^ result) & 0x80) == 1);
+
+        this.registers.accumulator = result & 0xFF;
+        this.registers.setFlag(MOS6502Registers.FLAG_NEGATIVE, ((this.registers.accumulator >> 7) & 1) == 1);
+        this.registers.setFlag(MOS6502Registers.FLAG_ZERO, result == 0);
+        this.registers.setFlag(MOS6502Registers.FLAG_CARRY_BIT, result > 0xFF);
     }
 
     /**
@@ -771,6 +789,35 @@ public final class MOS6502Processor {
 
         this.registers.stackPointer += 1;
         this.registers.status = this.readUInt8(STACK_MEMORY_LOCATION + this.registers.stackPointer);
+    }
+
+    /**
+     * Subtract Memory from Accumulator with Borrow.
+     */
+    private void instructionSBC() {
+
+        // It is possible to convert the subtraction to a simple addition by simply inverting
+        // the bits of the signed value to subtract.
+        //
+        //  3 = 00000011
+        // -3 = 11111100 + 00000001 = 11111101 (or 253 because uint8 have range 0..255)
+        //
+        // The documentation for the SBC instruction states that the operation "1 - C" (or ~C)
+        // should be performed. However, the XOR operator already does this.
+        final int memoryValue = this.readUInt8(this.resolvedAddress);
+        final int invertedBitMemoryValue = ((memoryValue & 0xFF) ^ 0x00FF) & 0xFF;
+        final int previousOpCarry = this.registers.getFlag(MOS6502Registers.FLAG_CARRY_BIT) ? 1 : 0;
+
+        final int result = this.registers.accumulator + invertedBitMemoryValue + previousOpCarry;
+
+        this.registers.setFlag(
+            MOS6502Registers.FLAG_OVERFLOW,
+            (~(this.registers.accumulator ^ invertedBitMemoryValue) & (this.registers.accumulator ^ result) & 0x80) == 1);
+
+        this.registers.accumulator = result & 0xFF;
+        this.registers.setFlag(MOS6502Registers.FLAG_NEGATIVE, ((this.registers.accumulator >> 7) & 1) == 1);
+        this.registers.setFlag(MOS6502Registers.FLAG_ZERO, result == 0);
+        this.registers.setFlag(MOS6502Registers.FLAG_CARRY_BIT, result > 0xFF);
     }
 
     /**
