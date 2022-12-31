@@ -110,6 +110,14 @@ public final class MOS6502Processor {
         this.operationCodeMap.put(0x2C, new OperationCode("BIT a", this::addressingModeAbsolute, this::instructionBIT));
         this.operationCodeMap.put(0x89, new OperationCode("BIT #", this::addressingModeImmediate, this::instructionBIT));
         this.operationCodeMap.put(0x24, new OperationCode("BIT zp", this::addressingModeZeroPage, this::instructionBIT));
+        this.operationCodeMap.put(0x4D, new OperationCode("EOR a", this::addressingModeAbsolute, this::instructionEOR));
+        this.operationCodeMap.put(0x5D, new OperationCode("EOR a,x", this::addressingModeAbsoluteIndexedX, this::instructionEOR));
+        this.operationCodeMap.put(0x59, new OperationCode("EOR a,y", this::addressingModeAbsoluteIndexedY, this::instructionEOR));
+        this.operationCodeMap.put(0x49, new OperationCode("EOR #", this::addressingModeImmediate, this::instructionEOR));
+        this.operationCodeMap.put(0x45, new OperationCode("EOR zp", this::addressingModeZeroPage, this::instructionEOR));
+        this.operationCodeMap.put(0x41, new OperationCode("EOR (zp,x)", this::addressingModeZeroPageIndexedXIndirect, this::instructionEOR));
+        this.operationCodeMap.put(0x55, new OperationCode("EOR zp,x", this::addressingModeZeroPageIndexedX, this::instructionEOR));
+        this.operationCodeMap.put(0x51, new OperationCode("EOR (zp),y", this::addressingModeZeroPageIndirectIndexedY, this::instructionEOR));
 
         // Arithmetic
         this.operationCodeMap.put(0x6D, new OperationCode("ADC a", this::addressingModeAbsolute, this::instructionADC));
@@ -681,6 +689,19 @@ public final class MOS6502Processor {
 
         this.registers.setFlag(MOS6502Registers.FLAG_NEGATIVE, ((this.registers.y >> 7) & 1) == 1);
         this.registers.setFlag(MOS6502Registers.FLAG_ZERO, this.registers.y == 0);
+    }
+
+    /**
+     * Exclusive-OR Memory with Accumulator.
+     */
+    private void instructionEOR() {
+
+        final int memoryValue = this.readUInt8(this.resolvedAddress);
+
+        this.registers.accumulator = this.registers.accumulator ^ memoryValue;
+
+        this.registers.setFlag(MOS6502Registers.FLAG_NEGATIVE, ((this.registers.accumulator >> 7) & 1) == 1);
+        this.registers.setFlag(MOS6502Registers.FLAG_ZERO, this.registers.accumulator == 0);
     }
 
     /**
