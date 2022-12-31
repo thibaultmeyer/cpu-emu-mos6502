@@ -18,7 +18,7 @@ final class MOS6502ProcessorTest {
         final MOS6502Processor processor = new MOS6502Processor(Collections.singletonList(new Memory()));
         processor.reset(0x400);
 
-        for (int idx = 0; idx < 1000; idx += 1) {
+        for (int idx = 0; idx < 1_000; idx += 1) {
             processor.clockTick();
         }
     }
