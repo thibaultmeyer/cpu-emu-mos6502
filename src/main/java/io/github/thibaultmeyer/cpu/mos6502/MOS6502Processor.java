@@ -56,7 +56,7 @@ public final class MOS6502Processor {
         this.busUnitList = new ArrayList<>(busUnitCollection);
         this.cycleCount = 0;
 
-        // TODO : TSX, CPY, DEC, INC, BRK, JSR, RTI, RTS
+        // TODO : BRK, JSR, RTI, RTS
         // Load/Store
         this.operationCodeMap.put(0xAD, new OperationCode("LDA a", this::addressingModeAbsolute, this::instructionLDA));
         this.operationCodeMap.put(0xBD, new OperationCode("LDA a,x", this::addressingModeAbsoluteIndexedX, this::instructionLDA));
@@ -160,9 +160,9 @@ public final class MOS6502Processor {
         this.operationCodeMap.put(0xEC, new OperationCode("CPX a", this::addressingModeAbsolute, this::instructionCPX));
         this.operationCodeMap.put(0xE0, new OperationCode("CPX #", this::addressingModeImmediate, this::instructionCPX));
         this.operationCodeMap.put(0xE4, new OperationCode("CPX zp", this::addressingModeZeroPage, this::instructionCPX));
-        this.operationCodeMap.put(0xCC, new OperationCode("CPX a", this::addressingModeAbsolute, this::instructionCPY));
-        this.operationCodeMap.put(0xC0, new OperationCode("CPX #", this::addressingModeImmediate, this::instructionCPY));
-        this.operationCodeMap.put(0xC4, new OperationCode("CPX zp", this::addressingModeZeroPage, this::instructionCPY));
+        this.operationCodeMap.put(0xCC, new OperationCode("CPY a", this::addressingModeAbsolute, this::instructionCPY));
+        this.operationCodeMap.put(0xC0, new OperationCode("CPY #", this::addressingModeImmediate, this::instructionCPY));
+        this.operationCodeMap.put(0xC4, new OperationCode("CPY zp", this::addressingModeZeroPage, this::instructionCPY));
 
         this.operationCodeMap.put(0xED, new OperationCode("SBC a", this::addressingModeAbsolute, this::instructionSBC));
         this.operationCodeMap.put(0xFD, new OperationCode("SBC a,x", this::addressingModeAbsoluteIndexedX, this::instructionSBC));
@@ -174,9 +174,17 @@ public final class MOS6502Processor {
         this.operationCodeMap.put(0xF1, new OperationCode("SBC (zp),y", this::addressingModeZeroPageIndirectIndexedY, this::instructionSBC));
 
         // Arithmetic: Dec/Inc
+        this.operationCodeMap.put(0xCE, new OperationCode("DEC a", this::addressingModeAbsolute, this::instructionDEC));
+        this.operationCodeMap.put(0xDE, new OperationCode("DEC a,x", this::addressingModeAbsoluteIndexedX, this::instructionDEC));
+        this.operationCodeMap.put(0xC6, new OperationCode("DEC zp", this::addressingModeZeroPage, this::instructionDEC));
+        this.operationCodeMap.put(0xD6, new OperationCode("DEC zp,x", this::addressingModeZeroPageIndexedX, this::instructionDEC));
         this.operationCodeMap.put(0xCA, new OperationCode("DEX i", this::addressingModeImplied, this::instructionDEX));
         this.operationCodeMap.put(0x88, new OperationCode("DEY i", this::addressingModeImplied, this::instructionDEY));
 
+        this.operationCodeMap.put(0xEE, new OperationCode("INC a", this::addressingModeAbsolute, this::instructionINC));
+        this.operationCodeMap.put(0xFE, new OperationCode("INC a,x", this::addressingModeAbsoluteIndexedX, this::instructionINC));
+        this.operationCodeMap.put(0xE6, new OperationCode("INC zp", this::addressingModeZeroPage, this::instructionINC));
+        this.operationCodeMap.put(0xF6, new OperationCode("INC zp,x", this::addressingModeZeroPageIndexedX, this::instructionINC));
         this.operationCodeMap.put(0xE8, new OperationCode("INX i", this::addressingModeImplied, this::instructionINX));
         this.operationCodeMap.put(0xC8, new OperationCode("INY i", this::addressingModeImplied, this::instructionINY));
 
@@ -701,6 +709,19 @@ public final class MOS6502Processor {
     }
 
     /**
+     * Decrement Memory by One.
+     */
+    private void instructionDEC() {
+
+        int memoryValue = this.readUInt8(this.resolvedAddress);
+        memoryValue = (memoryValue - 1) & 0xFF;
+        this.writeUInt8(memoryValue, this.resolvedAddress);
+
+        this.registers.setFlag(MOS6502Registers.FLAG_NEGATIVE, ((memoryValue >> 7) & 1) == 1);
+        this.registers.setFlag(MOS6502Registers.FLAG_ZERO, memoryValue == 0);
+    }
+
+    /**
      * Decrement Index X by One.
      */
     private void instructionDEX() {
@@ -733,6 +754,19 @@ public final class MOS6502Processor {
 
         this.registers.setFlag(MOS6502Registers.FLAG_NEGATIVE, ((this.registers.accumulator >> 7) & 1) == 1);
         this.registers.setFlag(MOS6502Registers.FLAG_ZERO, this.registers.accumulator == 0);
+    }
+
+    /**
+     * Increment Memory by One.
+     */
+    private void instructionINC() {
+
+        int memoryValue = this.readUInt8(this.resolvedAddress);
+        memoryValue = (memoryValue + 1) & 0xFF;
+        this.writeUInt8(memoryValue, this.resolvedAddress);
+
+        this.registers.setFlag(MOS6502Registers.FLAG_NEGATIVE, ((memoryValue >> 7) & 1) == 1);
+        this.registers.setFlag(MOS6502Registers.FLAG_ZERO, memoryValue == 0);
     }
 
     /**
