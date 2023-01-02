@@ -56,7 +56,6 @@ public final class MOS6502Processor {
         this.busUnitList = new ArrayList<>(busUnitCollection);
         this.cycleCount = 0;
 
-        // TODO : JSR, RTI, RTS
         // Load/Store
         this.operationCodeMap.put(0xAD, new OperationCode("LDA a", this::addressingModeAbsolute, this::instructionLDA));
         this.operationCodeMap.put(0xBD, new OperationCode("LDA a,x", this::addressingModeAbsoluteIndexedX, this::instructionLDA));
@@ -106,6 +105,7 @@ public final class MOS6502Processor {
         this.operationCodeMap.put(0x28, new OperationCode("PLP i", this::addressingModeImplied, this::instructionPLP));
 
         // Shift
+        // TODO: ASL LSR ROL ROR
 
         // Logic
         this.operationCodeMap.put(0x2D, new OperationCode("AND a", this::addressingModeAbsolute, this::instructionAND));
@@ -192,6 +192,9 @@ public final class MOS6502Processor {
         this.operationCodeMap.put(0x00, new OperationCode("BRK i", this::addressingModeImplied, this::instructionBRK));
         this.operationCodeMap.put(0x4C, new OperationCode("JMP a", this::addressingModeAbsolute, this::instructionJMP));
         this.operationCodeMap.put(0x6C, new OperationCode("JMP (a)", this::addressingModeAbsoluteIndirect, this::instructionJMP));
+        this.operationCodeMap.put(0x20, new OperationCode("JSR a", this::addressingModeAbsolute, this::instructionJSR));
+        this.operationCodeMap.put(0x40, new OperationCode("RTI i", this::addressingModeImplied, this::instructionRTI));
+        this.operationCodeMap.put(0x60, new OperationCode("RTS i", this::addressingModeImplied, this::instructionRTS));
 
         // Control Flow: Branch
         this.operationCodeMap.put(0x90, new OperationCode("BCC r", this::addressingModeRelative, this::instructionBCC));
@@ -822,6 +825,22 @@ public final class MOS6502Processor {
     }
 
     /**
+     * Jump to New Location (subroutine) Saving Return Address.
+     */
+    private void instructionJSR() {
+
+        this.registers.programCounter = this.registers.programCounter - 1;
+
+        this.writeUInt8(STACK_MEMORY_LOCATION + this.registers.stackPointer, (this.registers.programCounter >> 8) & 0xFF);
+        this.registers.stackPointer -= 1;
+
+        this.writeUInt8(STACK_MEMORY_LOCATION + this.registers.stackPointer, this.registers.programCounter & 0xFF);
+        this.registers.stackPointer -= 1;
+
+        this.registers.programCounter = this.resolvedAddress;
+    }
+
+    /**
      * Load Accumulator with Memory.
      */
     private void instructionLDA() {
@@ -911,6 +930,38 @@ public final class MOS6502Processor {
 
         this.registers.stackPointer += 1;
         this.registers.status = this.readUInt8(STACK_MEMORY_LOCATION + this.registers.stackPointer);
+    }
+
+    /**
+     * Return from Interrupt.
+     */
+    private void instructionRTI() {
+
+        this.registers.stackPointer += 1;
+        this.registers.status = this.readUInt8(STACK_MEMORY_LOCATION + this.registers.stackPointer);
+
+        final int lsb = this.readUInt8(STACK_MEMORY_LOCATION + this.registers.stackPointer);
+        this.registers.stackPointer += 1;
+
+        final int msb = this.readUInt8(STACK_MEMORY_LOCATION + this.registers.stackPointer);
+        this.registers.stackPointer += 1;
+
+        this.registers.programCounter = (msb << 8) | lsb;
+    }
+
+    /**
+     * Return from Subroutine.
+     */
+    private void instructionRTS() {
+
+        final int lsb = this.readUInt8(STACK_MEMORY_LOCATION + this.registers.stackPointer);
+        this.registers.stackPointer += 1;
+
+        final int msb = this.readUInt8(STACK_MEMORY_LOCATION + this.registers.stackPointer);
+        this.registers.stackPointer += 1;
+
+        this.registers.programCounter = (msb << 8) | lsb;
+        this.registers.programCounter += 1;
     }
 
     /**
