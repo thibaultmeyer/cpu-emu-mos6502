@@ -56,7 +56,7 @@ public final class MOS6502Processor {
         this.busUnitList = new ArrayList<>(busUnitCollection);
         this.cycleCount = 0;
 
-        // TODO : BRK, JSR, RTI, RTS
+        // TODO : JSR, RTI, RTS
         // Load/Store
         this.operationCodeMap.put(0xAD, new OperationCode("LDA a", this::addressingModeAbsolute, this::instructionLDA));
         this.operationCodeMap.put(0xBD, new OperationCode("LDA a,x", this::addressingModeAbsoluteIndexedX, this::instructionLDA));
@@ -189,6 +189,7 @@ public final class MOS6502Processor {
         this.operationCodeMap.put(0xC8, new OperationCode("INY i", this::addressingModeImplied, this::instructionINY));
 
         // Control Flow
+        this.operationCodeMap.put(0x00, new OperationCode("BRK i", this::addressingModeImplied, this::instructionBRK));
         this.operationCodeMap.put(0x4C, new OperationCode("JMP a", this::addressingModeAbsolute, this::instructionJMP));
         this.operationCodeMap.put(0x6C, new OperationCode("JMP (a)", this::addressingModeAbsoluteIndirect, this::instructionJMP));
 
@@ -458,6 +459,37 @@ public final class MOS6502Processor {
     }
 
     /**
+     * Add Memory to Accumulator with Carry.
+     */
+    private void instructionADC() {
+
+        final int memoryValue = this.readUInt8(this.resolvedAddress);
+        final int previousOpCarry = this.registers.getFlag(MOS6502Registers.FLAG_CARRY_BIT) ? 1 : 0;
+        final int result = this.registers.accumulator + memoryValue + previousOpCarry;
+
+        this.registers.setFlag(
+            MOS6502Registers.FLAG_OVERFLOW,
+            (~(this.registers.accumulator ^ memoryValue) & (this.registers.accumulator ^ result) & 0x80) == 1);
+
+        this.registers.accumulator = result & 0xFF;
+        this.registers.setFlag(MOS6502Registers.FLAG_NEGATIVE, ((this.registers.accumulator >> 7) & 1) == 1);
+        this.registers.setFlag(MOS6502Registers.FLAG_ZERO, result == 0);
+        this.registers.setFlag(MOS6502Registers.FLAG_CARRY_BIT, result > 0xFF);
+    }
+
+    /**
+     * AND Memory with Accumulator.
+     */
+    private void instructionAND() {
+
+        final int memoryValue = this.readUInt8(this.resolvedAddress);
+        this.registers.accumulator = (this.registers.accumulator & memoryValue) & 0xFF;
+
+        this.registers.setFlag(MOS6502Registers.FLAG_NEGATIVE, ((this.registers.accumulator >> 7) & 1) == 1);
+        this.registers.setFlag(MOS6502Registers.FLAG_ZERO, this.registers.accumulator == 0);
+    }
+
+    /**
      * Branch on Carry Clear (Flag {@link MOS6502Registers#FLAG_CARRY_BIT} = 0).
      */
     private void instructionBCC() {
@@ -489,37 +521,6 @@ public final class MOS6502Processor {
 
             this.registers.programCounter = this.resolvedAddress;
         }
-    }
-
-    /**
-     * Add Memory to Accumulator with Carry.
-     */
-    private void instructionADC() {
-
-        final int memoryValue = this.readUInt8(this.resolvedAddress);
-        final int previousOpCarry = this.registers.getFlag(MOS6502Registers.FLAG_CARRY_BIT) ? 1 : 0;
-        final int result = this.registers.accumulator + memoryValue + previousOpCarry;
-
-        this.registers.setFlag(
-            MOS6502Registers.FLAG_OVERFLOW,
-            (~(this.registers.accumulator ^ memoryValue) & (this.registers.accumulator ^ result) & 0x80) == 1);
-
-        this.registers.accumulator = result & 0xFF;
-        this.registers.setFlag(MOS6502Registers.FLAG_NEGATIVE, ((this.registers.accumulator >> 7) & 1) == 1);
-        this.registers.setFlag(MOS6502Registers.FLAG_ZERO, result == 0);
-        this.registers.setFlag(MOS6502Registers.FLAG_CARRY_BIT, result > 0xFF);
-    }
-
-    /**
-     * AND Memory with Accumulator.
-     */
-    private void instructionAND() {
-
-        final int memoryValue = this.readUInt8(this.resolvedAddress);
-        this.registers.accumulator = (this.registers.accumulator & memoryValue) & 0xFF;
-
-        this.registers.setFlag(MOS6502Registers.FLAG_NEGATIVE, ((this.registers.accumulator >> 7) & 1) == 1);
-        this.registers.setFlag(MOS6502Registers.FLAG_ZERO, this.registers.accumulator == 0);
     }
 
     /**
@@ -584,6 +585,27 @@ public final class MOS6502Processor {
 
             this.registers.programCounter = this.resolvedAddress;
         }
+    }
+
+    /**
+     * Force an Interrupt.
+     */
+    private void instructionBRK() {
+
+        this.registers.setFlag(MOS6502Registers.FLAG_DISABLE_INTERRUPTS, true);
+        this.registers.setFlag(MOS6502Registers.FLAG_BREAK, true);
+
+        this.writeUInt8(STACK_MEMORY_LOCATION + this.registers.stackPointer, (this.registers.programCounter >> 8) & 0xFF);
+        this.registers.stackPointer -= 1;
+
+        this.writeUInt8(STACK_MEMORY_LOCATION + this.registers.stackPointer, this.registers.programCounter & 0xFF);
+        this.registers.stackPointer -= 1;
+
+        final int lsb = this.readUInt8(PROGRAM_COUNTER_MEMORY_LOCATION);
+        final int msb = this.readUInt8(PROGRAM_COUNTER_MEMORY_LOCATION + 1);
+        this.registers.programCounter = (msb << 8) | lsb;
+
+        this.registers.setFlag(MOS6502Registers.FLAG_BREAK, false);
     }
 
     /**
