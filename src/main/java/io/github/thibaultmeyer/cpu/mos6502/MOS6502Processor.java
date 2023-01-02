@@ -105,7 +105,17 @@ public final class MOS6502Processor {
         this.operationCodeMap.put(0x28, new OperationCode("PLP i", this::addressingModeImplied, this::instructionPLP));
 
         // Shift
-        // TODO: ASL LSR ROL ROR
+        // TODO: LSR ROL ROR
+        this.operationCodeMap.put(0x0E, new OperationCode("ASL a", this::addressingModeAbsolute, this::instructionASL));
+        this.operationCodeMap.put(0x1E, new OperationCode("ASL a,x", this::addressingModeAbsoluteIndexedX, this::instructionASL));
+        this.operationCodeMap.put(0x0A, new OperationCode("ASL A", this::addressingModeAccumulator, this::instructionASL));
+        this.operationCodeMap.put(0x06, new OperationCode("ASL zp", this::addressingModeZeroPage, this::instructionASL));
+        this.operationCodeMap.put(0x16, new OperationCode("ASL zp,x", this::addressingModeZeroPageIndexedX, this::instructionASL));
+        this.operationCodeMap.put(0x4E, new OperationCode("LSR a", this::addressingModeAbsolute, this::instructionLSR));
+        this.operationCodeMap.put(0x5E, new OperationCode("LSR a,x", this::addressingModeAbsoluteIndexedX, this::instructionLSR));
+        this.operationCodeMap.put(0x4A, new OperationCode("LSR A", this::addressingModeAccumulator, this::instructionLSR));
+        this.operationCodeMap.put(0x46, new OperationCode("LSR zp", this::addressingModeZeroPage, this::instructionLSR));
+        this.operationCodeMap.put(0x56, new OperationCode("LSR zp,x", this::addressingModeZeroPageIndexedX, this::instructionLSR));
 
         // Logic
         this.operationCodeMap.put(0x2D, new OperationCode("AND a", this::addressingModeAbsolute, this::instructionAND));
@@ -365,6 +375,15 @@ public final class MOS6502Processor {
     }
 
     /**
+     * Accumulator: Accumulator is implied as the operand, so no address needs to be specified.
+     */
+    private void addressingModeAccumulator() {
+
+        this.resolvedAddress = -1;
+        this.cycleCount += 1;
+    }
+
+    /**
      * Immediate: Operand is used directly to perform the computation.
      */
     private void addressingModeImmediate() {
@@ -490,6 +509,28 @@ public final class MOS6502Processor {
 
         this.registers.setFlag(MOS6502Registers.FLAG_NEGATIVE, ((this.registers.accumulator >> 7) & 1) == 1);
         this.registers.setFlag(MOS6502Registers.FLAG_ZERO, this.registers.accumulator == 0);
+    }
+
+    /**
+     * Arithmetic Shift Left One Bit.
+     */
+    private void instructionASL() {
+
+        final int currentValue = this.resolvedAddress == -1
+            ? this.registers.accumulator
+            : this.readUInt8(this.resolvedAddress);
+
+        final int shiftedValue = ((currentValue & 0xFFFF) << 1) & 0xFFFF;
+
+        this.registers.setFlag(MOS6502Registers.FLAG_NEGATIVE, ((shiftedValue >> 7) & 1) == 1);
+        this.registers.setFlag(MOS6502Registers.FLAG_ZERO, shiftedValue == 0);
+        this.registers.setFlag(MOS6502Registers.FLAG_CARRY_BIT, ((currentValue >> 7) & 1) == 1);
+
+        if (this.resolvedAddress == -1) {
+            this.registers.programCounter = shiftedValue;
+        } else {
+            writeUInt8(this.resolvedAddress, shiftedValue);
+        }
     }
 
     /**
@@ -871,6 +912,28 @@ public final class MOS6502Processor {
 
         this.registers.setFlag(MOS6502Registers.FLAG_NEGATIVE, ((this.registers.y >> 7) & 1) == 1);
         this.registers.setFlag(MOS6502Registers.FLAG_ZERO, this.registers.y == 0);
+    }
+
+    /**
+     * Logical Shift Right One Bit.
+     */
+    private void instructionLSR() {
+
+        final int currentValue = this.resolvedAddress == -1
+            ? this.registers.accumulator
+            : this.readUInt8(this.resolvedAddress);
+
+        final int shiftedValue = ((currentValue & 0xFFFF) >> 1) & 0xFFFF;
+
+        this.registers.setFlag(MOS6502Registers.FLAG_NEGATIVE, (currentValue & 1) == 1);
+        this.registers.setFlag(MOS6502Registers.FLAG_ZERO, shiftedValue == 0);
+        this.registers.setFlag(MOS6502Registers.FLAG_CARRY_BIT, ((shiftedValue >> 7) & 1) == 1);
+
+        if (this.resolvedAddress == -1) {
+            this.registers.programCounter = shiftedValue;
+        } else {
+            writeUInt8(this.resolvedAddress, shiftedValue);
+        }
     }
 
     /**
