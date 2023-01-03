@@ -105,7 +105,6 @@ public final class MOS6502Processor {
         this.operationCodeMap.put(0x28, new OperationCode("PLP i", this::addressingModeImplied, this::instructionPLP));
 
         // Shift
-        // TODO: LSR ROL ROR
         this.operationCodeMap.put(0x0E, new OperationCode("ASL a", this::addressingModeAbsolute, this::instructionASL));
         this.operationCodeMap.put(0x1E, new OperationCode("ASL a,x", this::addressingModeAbsoluteIndexedX, this::instructionASL));
         this.operationCodeMap.put(0x0A, new OperationCode("ASL A", this::addressingModeAccumulator, this::instructionASL));
@@ -116,6 +115,16 @@ public final class MOS6502Processor {
         this.operationCodeMap.put(0x4A, new OperationCode("LSR A", this::addressingModeAccumulator, this::instructionLSR));
         this.operationCodeMap.put(0x46, new OperationCode("LSR zp", this::addressingModeZeroPage, this::instructionLSR));
         this.operationCodeMap.put(0x56, new OperationCode("LSR zp,x", this::addressingModeZeroPageIndexedX, this::instructionLSR));
+        this.operationCodeMap.put(0x2E, new OperationCode("ROL a", this::addressingModeAbsolute, this::instructionROL));
+        this.operationCodeMap.put(0x3E, new OperationCode("ROL a,x", this::addressingModeAbsoluteIndexedX, this::instructionROL));
+        this.operationCodeMap.put(0x2A, new OperationCode("ROL A", this::addressingModeAccumulator, this::instructionROL));
+        this.operationCodeMap.put(0x26, new OperationCode("ROL zp", this::addressingModeZeroPage, this::instructionROL));
+        this.operationCodeMap.put(0x36, new OperationCode("ROL zp,x", this::addressingModeZeroPageIndexedX, this::instructionROL));
+        this.operationCodeMap.put(0x6E, new OperationCode("ROR a", this::addressingModeAbsolute, this::instructionROR));
+        this.operationCodeMap.put(0x7E, new OperationCode("ROR a,x", this::addressingModeAbsoluteIndexedX, this::instructionROR));
+        this.operationCodeMap.put(0x6A, new OperationCode("ROR A", this::addressingModeAccumulator, this::instructionROR));
+        this.operationCodeMap.put(0x66, new OperationCode("ROR zp", this::addressingModeZeroPage, this::instructionROR));
+        this.operationCodeMap.put(0x76, new OperationCode("ROR zp,x", this::addressingModeZeroPageIndexedX, this::instructionROR));
 
         // Logic
         this.operationCodeMap.put(0x2D, new OperationCode("AND a", this::addressingModeAbsolute, this::instructionAND));
@@ -993,6 +1002,52 @@ public final class MOS6502Processor {
 
         this.registers.stackPointer += 1;
         this.registers.status = this.readUInt8(STACK_MEMORY_LOCATION + this.registers.stackPointer);
+    }
+
+    /**
+     * Rotate Left One Bit.
+     */
+    private void instructionROL() {
+
+        final int carryFlagValue = this.registers.getFlag(MOS6502Registers.FLAG_CARRY_BIT) ? 1 : 0;
+        final int currentValue = this.resolvedAddress == -1
+            ? this.registers.accumulator
+            : this.readUInt8(this.resolvedAddress);
+
+        final int shiftedValue = (((currentValue & 0xFFFF) << 1) | carryFlagValue) & 0xFFFF;
+
+        this.registers.setFlag(MOS6502Registers.FLAG_NEGATIVE, ((shiftedValue >> 6) & 1) == 1);
+        this.registers.setFlag(MOS6502Registers.FLAG_ZERO, shiftedValue == 0);
+        this.registers.setFlag(MOS6502Registers.FLAG_CARRY_BIT, ((currentValue >> 7) & 1) == 1);
+
+        if (this.resolvedAddress == -1) {
+            this.registers.programCounter = shiftedValue;
+        } else {
+            writeUInt8(this.resolvedAddress, shiftedValue);
+        }
+    }
+
+    /**
+     * Rotate Right One Bit.
+     */
+    private void instructionROR() {
+
+        final int carryFlagValue = this.registers.getFlag(MOS6502Registers.FLAG_CARRY_BIT) ? 1 : 0;
+        final int currentValue = this.resolvedAddress == -1
+            ? this.registers.accumulator
+            : this.readUInt8(this.resolvedAddress);
+
+        final int shiftedValue = (((carryFlagValue & 0xFFFF) << 7) | ((currentValue & 0xFFFF) >> 1)) & 0xFFFF;
+
+        this.registers.setFlag(MOS6502Registers.FLAG_NEGATIVE, ((shiftedValue >> 6) & 1) == 1);
+        this.registers.setFlag(MOS6502Registers.FLAG_ZERO, shiftedValue == 0);
+        this.registers.setFlag(MOS6502Registers.FLAG_CARRY_BIT, (currentValue & 1) == 1);
+
+        if (this.resolvedAddress == -1) {
+            this.registers.programCounter = shiftedValue;
+        } else {
+            writeUInt8(this.resolvedAddress, shiftedValue);
+        }
     }
 
     /**
